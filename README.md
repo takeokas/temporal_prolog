@@ -8,7 +8,7 @@
    
 Temporal Prologは、桜川貴司氏が考案した、時相論理型言語である。  
 本Temporal Prologは、竹岡が作成した、その実行系の実装の一つである。  
-本Temporal Prologは、時相論理型言語処理系の実現として、重要ないくつかの特徴を持つ。 それは、別文書に詳述する。  
+本Temporal Prologは、時相論理型言語処理系の実現として、重要ないくつかの特徴を持つ。 それは、<a href=an_Implementation_of_TemporalProlog.md > 別文書 </a> に詳述する。  
   
   
 # 1. 本Temporal Prologの概略文法  

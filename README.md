@@ -1,4 +1,6 @@
-Temporal Prolog(たけおか版)マニュアル
+# Temporal Prolog(たけおか版)マニュアル
+
+初出: 2011/MAY/05
 
 たけおか (竹岡尚三)
 

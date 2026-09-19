@@ -1,0 +1,13 @@
+;;
+;; hanoi.lsp
+;; ((hanoi 3 a b via))
+(tmpro-assert-new
+ '(((hanoi 1 *f *t *v) (prin1 *f)(prin1 ->)(print *t))
+   ((hanoi *n *f *t *v) (- *n 1 *n1)
+    (hanoi *n1 *f *v *t)
+    (hanoi 1 *f *t *v)
+    (hanoi *n1 *v *t *f))))
+
+(tmpro-assert-at0-new nil)
+
+;; eof

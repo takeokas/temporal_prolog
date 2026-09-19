@@ -1,0 +1,21 @@
+;;
+;; factorial
+;; ((fa 5 *x))  ; for normal prolog
+;; ((fat 5 1 *x)) ; tail recursive for normal prolog
+(tmpro-assert-new
+ '(
+   ((fa 0 1))
+   ((fa *n *x) (- *n 1 *n1)(fa *n1 *x1)(mul *x1 *n *x))
+
+   ((fat 0 *r *r))
+   ((fat *n *ir *r) (- *n 1 *n1)(mul *ir *n *ir1)(fat *n1 *ir1 *r))
+
+   ((f *n1 *ir1 *r) (●f *n *ir *r)(> *n 0)(- *n 1 *n1)(mul *ir *n *ir1))
+   ((z) (●f 1 *r *x)(prin1 "fact=")(print *r))
+   ((z) (●z))))
+
+(tmpro-assert-at0-new 
+ '(
+   ((●f 4 1 *r))))
+
+;; eof

@@ -1,0 +1,656 @@
+;;;; -*-   coding: utf-8 -*-
+;;;
+;;;	Temporal Prolog Ver 0.40
+;;;	by Shozo TAKEOKA, take@takeoka.org
+;;;	2011/MAY/05
+;;;	1987/Jul/14
+;;;	1987/Jan/16
+;;;	1986/Dec/25
+;;;
+;;; (load "tmpro114.lsp")
+;; (load "nobiru.lsp")
+;; (load "not.lsp")
+;; (load "not4.lsp")
+;
+; to start temporal prolog execution
+;(tmpro)
+;
+; Lisp Functions
+;(tmpro-trace t)
+;(tmpro-trace nil)
+;(tmpro-assert-new ...)
+;(tmpro-assert-at0-new ..)
+;
+;
+;;;;;; nomal prolog top-level is (proa)
+;;; (proa)
+;;  prolog append-test
+;;; ((append *x *y (a s d))(prin1 *x)(f))
+;;; ((append (a s d) (q w e) *x))
+;;; ((xap on))
+;;; hanoi test
+;; ((hanoi 3 a b via))
+;;
+;;;;
+;; Can your lisp treate below characters?
+;; If NOT you may refer #+kcl part , use '@' instead '●'
+;; (aref (SYMBOL-NAME '□■◆●) 2)
+;;
+
+
+(defvar *hito-mukashi*)
+(defvar *ima-mukashi*)
+(defvar *facts*)
+(defvar *yaraneba*)
+(defvar *time*)
+(defvar *at_0*)
+(defvar *at_000*)
+(defvar *halt-time*)
+
+(defvar *built_in*)
+
+(defvar *tmpro-debug-print*)
+(defvar *pro-debug-print*)
+
+(setq *tmpro-debug-print* nil)
+(setq *pro-debug-print* nil)
+
+(defmacro tpro-format ( &rest lll)
+ (list
+  'when '*tmpro-debug-print*
+  (cons 'format  lll)))
+
+(defmacro pro-format (&rest lll)
+  (list
+   'when '*pro-debug-print*
+   (cons 'format  lll)))
+
+#+kcl (defconstant mukashi-kigou "@")
+#-kcl (defconstant mukashi-kigou "●")
+
+(defmacro mukashi_name (x)
+  `(intern(concatenate 'string mukashi-kigou (symbol-name ,x))))
+
+(defmacro mukashi? (x)
+  `(and(symbolp ,x) (string= mukashi-kigou (1st ,x))))
+
+(defmacro 1st(x)
+  `(aref (symbol-name ,x) 0) )
+
+(defmacro var? (x)
+  `(and (symbolp ,x)
+	(string= "*" (1st ,x))))
+
+
+(defun dovar (pair)	;returns (Flg . pair)  ;pair=(value . env)
+ (let (var-val new-pair (x (car pair)) (env (cdr pair)))
+;(format t "doVar x=~s , env=~s~%" x env)
+   (cond
+    ((not (var? x)) (error "~s is not VAR" x))
+    ((null (setq var-val (assoc x (cdr env))))
+     (cons NIL pair))
+    ((not(var? (car (setq new-pair (cdr var-val)))))
+     (cons T new-pair))
+    (t
+     (dovar new-pair)))))
+
+
+(defmacro bind (px py)
+;(format t " x ~s <-y ~s~%" (car ,px) ,py)
+ `(cond
+  ((and(eql(car ,px)(car ,py))(eql (cdr ,px)(cdr ,py)))
+   T)
+  (t
+;(format t "bind: x ~s <-y ~s~%" (car ,px) ,py)
+   (rplacd (cdr ,px)
+	(cons (cons (car ,px) ,py) (cdr (cdr ,px)))))))
+
+(defun unify (pairx pairy)
+ (let (pax pay result-x result-y)
+;(format t "unify x=~s , envx=~s~%" (car pairx)(cdr pairx))
+;(format t "      y=~s , envy=~s~%" (car pairy)(cdr pairy))
+   (cond
+    ((var? (car pairx))
+     (setq result-x (dovar pairx))
+     (setq pax (cdr result-x)))
+    (t
+     (setq pax pairx)))
+
+   (cond
+    ((var? (car pairy))
+     (setq result-y (dovar pairy))
+     (setq pay (cdr result-y)))
+    (t
+     (setq pay pairy)))
+
+   (cond
+    ((and (var? (car pairx))
+	  (not (car result-x)))
+	;unbound & bind var
+;(format t "biVar: x=~s , envx=~s~%" (car pairx)(cdr pairx))
+     (bind pax pay)
+     T)
+
+    ((and (var? (car pairy))
+	  (not (car result-y)))
+	;unbound & bind var
+;(format t "biVar: y =~s , envy=~s~%" (car pairy)(cdr pairy))
+     (bind pay pax)
+     T)
+
+    ((atom (car pax)) ; bound & compair value
+     (eql(car pax)(car pay)))
+
+    ((atom (car pay)) ; bound & compair 
+     (eql(car pax)(car pay)))
+
+    (t
+     (let ( (x (car pax))(envx (cdr pax)) (y (car pay))(envy (cdr pay)))
+       (and
+	(unify (cons (car x) envx) (cons (car y) envy))
+	(unify (cons (cdr x) envx) (cons (cdr y) envy))))))))
+
+
+;;;   Driver of UNIFY for testing
+
+(defmacro unib (x y)
+  `(let (
+	 (ex (cons ':ENVX nil)) ;get 2 new cons dynamically
+	 (ey (cons ':ENVY nil)))
+     (list (unify (cons ,x ex) (cons ,y ey) ) ex ey)))
+
+
+;;;    top level of UNIFY for testing
+
+(defmacro unia()
+  '(do ((x) (y)(result)) (nil T)
+       (setq x (read))
+       (cond ((eql x 'end)
+	      (return T)))
+       (setq y (read))
+       (cond ((eql y 'end)
+	      (return T)))
+       (setq result (unib x y))
+       (format t "unify=~s~%" (car result))
+       (format t "ex=~s~%" (cadr result))
+       (format t "ey=~s~%" (caddr result))))
+
+;;
+(defun tangle-var (lst env)
+  (let (x)
+;(if(null lst) (return-from tangle-var NIL ))
+     (cond
+      ((not(atom lst))
+       (cons (tangle-var (car lst) env)
+	     (tangle-var (cdr lst) env)))
+      (t ;lst is symbol
+       (cond
+	((not(var? lst))
+	 lst) ;not Var must be Atom
+	(t ; dereference variable
+	 (setq x (dovar (cons lst env)))
+	 (cond
+	  ((not (car x))
+	   (cadr x))
+	  (t
+	   (tangle-var (cadr x)(cddr x))))))))))
+
+;;;
+;;;
+
+(defmacro assert-ima-mukashi (new)
+  `(progn
+     (push (cons (car ,new) ()) *ima-mukashi*)
+     (tpro-format t "new ima-mukashi=~s~%" ,new)))
+
+;;;
+;;;	Prolog
+;;;
+
+(defmacro pro-or (cur-fact goal1 goal env que not_flg)
+ `(let ((undo NIL)envy new-clause rrr)
+    (loop
+     (push  (cdr ,env) undo)
+     (setq envy (cons ':ENVY nil )) ;get new cons dynamically
+     (when(null ,cur-fact) ; no more clause, fail head matching
+       (return :no-match))
+;(format t " cur-fact=~s~%" ,cur-fact)
+     (setq new-clause (pop ,cur-fact))
+;(format t " new-clause=~s~%" new-clause)
+     (when (unify(cons ,goal1 ,env)(cons (car new-clause) envy)) ; matching head
+				; body becomes new-goal
+       (setq rrr (pro-and (cdr new-clause) envy (cons(cons(cdr ,goal),env),que) ,not_flg))
+       ;(format t " rrr=~s " rrr)
+       (cond
+	((eql rrr :not-t)
+	 (return NIL))
+	((eql rrr t)
+	 (return T))
+	(t  ;continue the loop, try next clause
+	 )))
+     (rplacd ,env (car undo)) ; restore env
+     (pop undo))))
+
+
+(defmacro pro-and11 (goal1 goal env que not_flg)
+  `(let (envy  cur-fact  rrr rr)
+    (cond
+     ((mukashi? (car ,goal1))
+      ;(format t " ***Mukashi=~s  *** " *hito-mukashi*)
+      (setq cur-fact *hito-mukashi*))
+     (t
+      (setq cur-fact *facts*)))
+
+    (setq rr (pro-or cur-fact ,goal1 ,goal ,env ,que ,not_flg))
+    (cond
+     ((eql rr :no-match)
+      (cond
+       (,not_flg 
+	(setq envy (cons ':ENVY nil )) ;get new cons dynamically
+	(setq rrr (pro-and () envy (cons(cons(cdr ,goal),env),que) NIL))
+	;(format t " rrrN=~s " rrr)
+	(cond
+	 ((eql rrr :not-t)
+	  NIL)
+	 ((eql rrr t)
+	  T)
+	 (t  ;loop-continue, try another clause
+	  NIL)))
+       (T NIL)))
+     (t rr))))
+
+(defmacro pro-and1 (goal env que)
+ `(let (goal1  (not_flg NIL) gomi )
+    (setq goal1 (car ,goal))
+    (when (eql goal1 '~)
+      ;(format t " NOT-in-pro-and ")
+      (setq not_flg T)(setq goal1(car(setq ,goal (cdr ,goal)))))
+
+    (cond
+     ((and (listp goal1)(eql (car goal1) '*SYSTEM*)) ;Built-in predicate
+      (and (eval (tangle-var (cdr goal1) ,env))
+	   (pro-and () () (cons(cons(cdr ,goal),env),que) nil)))
+     ((and(listp goal1)(eql (car goal1) '*SYSTEM-FUNC*)) ;Built-in Function
+      (and
+       (setq gomi (tangle-var (cdr goal1) ,env))
+       (apply (car gomi)(cons ,env(cdr gomi)))
+       (pro-and () () (cons(cons(cdr ,goal),env),que) nil)))
+     (t
+      (pro-and11 goal1 ,goal ,env ,que not_flg)))))
+
+(defun pro-and (goal env que do_not)
+  (let ()
+;(format t "goal=~s que=~s do_not=~s~%" goal que do_not)
+    (when (not(null goal))
+      ;(pro-format t "goal=~s~%" goal)
+      (pro-format t "goal=~s~%" (tangle-var goal env)))
+    (cond
+     ((null goal)
+      (cond
+       (do_not
+	;(format t " return-NOT-NIL ")
+	:not-t) ; ~ (true)
+       (t
+	(cond
+	 ((null que) (if do_not NIL T))
+	 (t 
+	  (pro-and (caar que)(cdar que)(cdr que) nil))))))
+     (t
+      (pro-and1 goal env que)))))
+
+
+
+;;;	normal Prolog , Top Level
+
+
+;; 1 query
+(defmacro pro(goal)
+  `(let(env result)
+     (setq env (cons :ENV ())) ; get new cons dynamically 
+     (setq result (pro-and ,goal env NIL nil))
+     ;(format t "~%result=~s, env=~s~%" result env)
+     (format t "~%result=~s~%" result)
+     (format t "reduced-goal=~s~%" (tangle-var ,goal env))))
+
+;; top level loop
+(defmacro proa()
+  `(let()
+     (setq *print-circle* t)
+     ;(format t "to quit prolog,input simple symbol END~%")
+     (do ((endf nil)(goal))
+	 (endf  t)
+	 (format t "~%@?-")
+#+sbcl	 (SB-INT:FLUSH-STANDARD-OUTPUT-STREAMS)
+	 (setq goal (read))
+	 (cond
+	  ((eql goal 'end) (setq endf t))
+	  ((eql goal 'trace)(pro-trace t))
+	  ((eql goal 'notrace)(pro-trace nil))
+	  ((not(listp goal))
+	   (cond
+	    ((boundp goal)
+		  (format t "lisp value=~s" (eval goal)))
+	    (t
+	     (format t "to quit prolog,type-in END~%"))))
+	  ((not(listp (car goal)))
+	   (format t "lisp value=~s" (eval goal)))
+	  (t
+	   (pro goal))))))
+
+
+
+;;;	temporal Prolog
+
+;;; do 1 clause
+(defmacro tem-pro(yaru-clause)
+  `(let(env result)
+    (tpro-format t "ima-yaru=~s~%" ,yaru-clause)
+    (setq env (cons ':ENV ())) ; get new cons dynamically 
+    (setq result (pro-and (cdr ,yaru-clause) env NIL nil))
+    ;(format t "~%result=~s, env=~s~%" result env)
+    (tpro-format t "~%result=~s reduced-goal=~s~%"
+	    result  (tangle-var ,yaru-clause env))
+    (when result
+      (assert-ima-mukashi (tangle-var ,yaru-clause env)))))
+
+;;; do 1-time , 一仕切りやる
+(defmacro 1-shikiri ()
+ `(dolist (cl *yaraneba*)
+    (tem-pro cl)))
+
+
+#|
+;;; do 1 clause
+(defun tem-pro(yaru-clause)
+  (let(env result)
+    (format t "ima-yaru=~s~%" yaru-clause)
+    (setq env (cons ':ENV ())) ; get new cons dynamically 
+    (setq result (pro-and (cdr yaru-clause) env NIL nil))
+    ;(format t "~%result=~s, env=~s~%" result env)
+    (format t "~%result=~s~%" result)
+    (format t "reduced-goal=~s~%" (tangle-var yaru-clause env))
+    (when result
+      (assert-ima-mukashi (tangle-var yaru-clause env)))))
+
+;;; do 1-time , 一仕切りやる
+(defmacro 1-shikiri ()
+  `(mapc #'tem-pro *yaraneba*))
+|#
+
+;;;	Top Level of temporal-Prolog
+(defmacro tmpro()
+  `(let (facts_save)
+     (setq *print-circle* t)
+;     (setq *ima-mukashi* NIL)
+;     (setq *ima-mukashi* *at_0*)
+     (make-at0 *at_000*)
+ (format t "*ima-mukashi*=~s *at_0*=~s~%" *ima-mukashi* *at_0*)
+     (setq *time* 0)
+
+     (setq facts_save *facts*)
+     (setq *facts* (append *facts* *at_0*))
+     (make_yaraneba)
+     (format t "*yaraneba*=~s~%" *yaraneba*)
+     (1-shikiri-a)
+     (setq *facts* facts_save)
+     (make_yaraneba)
+     (format t "*yaraneba*=~s~%" *yaraneba*)
+     (loop
+      (1-shikiri-a)
+      (when
+        (and (>= *halt-time* 0)(> *time* *halt-time*))(return));for Testing...
+      )))
+
+(defmacro 1-shikiri-a ()
+ `(progn
+    (format t "**** 1-shikiri **** *time*=~s~%" *time*)
+ ;(format t "*ima-mukashi*=~s~%" *ima-mukashi*)
+    (setq *hito-mukashi* *ima-mukashi*)
+    (setq *ima-mukashi* NIL)
+    (format t "*hito-mukashi*=~s~%" *hito-mukashi*)
+    (1-shikiri)
+    (setq *time* (+ *time* 1))))
+
+
+(defmacro make_yaraneba ()
+  `(let ((already nil) x)
+     (setq *yaraneba* NIL)
+     (dolist (clause *facts*)
+       (setq x (scan_clause clause))
+       ;(format t "clause=~a ~a ~%" clause x)
+       (when x
+	 (dolist (xx x)
+	   (cond
+	    ((member xx already) t)
+	    (t
+	     (push xx already)
+	     (assert_yaraneba xx))))))))
+
+; find  mukashi functor
+(defmacro scan_clause (clause)
+  `(let (functor res )
+     (setq res NIL)
+     (dolist (term (cdr ,clause) res)
+       (when(listp term)
+	 (setq functor (car term))
+	 (if(mukashi? functor) (push functor res))))))
+
+(defmacro assert_yaraneba (functor)
+ `(let(new-cl
+       (pure-func
+         (intern(string-left-trim mukashi-kigou
+            (symbol-name ,functor)))))
+;(format t "ass_ya=~s ~s~%" ,functor mukashi-func)
+    (dolist
+         (cl *facts*)
+      (cond
+       ((eql pure-func (caar cl))
+	(setq new-cl
+	      (cons
+	       (cons(mukashi_name pure-func)
+		    (cdar cl))
+	       (cdr cl)))
+	(push new-cl *yaraneba*))
+       (t
+	T)))))
+
+;;;
+;;;
+;;;
+
+
+(defun built_in ()
+ '(
+   ((+ *x *y *z) (*SYSTEM-FUNC*   .(pro+ *x *y *z)))
+   ((- *x *y *z) (*SYSTEM-FUNC*   .(pro- *x *y *z)))
+   ((mul *x *y *z) (*SYSTEM-FUNC* .(pro* *x *y *z)))
+   ((/ *x *y *z) (*SYSTEM-FUNC*   .(pro/ *x *y *z)))
+   ((< *x *y)  (*SYSTEM* . (< (quote *x)(quote *y))))
+   ((<= *x *y) (*SYSTEM* . (<= (quote *x)(quote *y))))
+   ((=< *x *y) (*SYSTEM* . (<= (quote *x)(quote *y))))
+   ((> *x *y)  (*SYSTEM* . (> (quote *x)(quote *y))))
+   ((>= *x *y) (*SYSTEM* . (>= (quote *x)(quote *y))))
+   ((== *x *x) )
+   ((at *x) (*SYSTEM* . (eql *time* (quote *x))))
+
+   ((read *z)  (*SYSTEM-FUNC* .(pro_read *z)))
+   ((print *x) (*SYSTEM* . (progn (format t "~s~%" (quote *x))T)))
+   ((prin1 *x) (*SYSTEM* . (progn (format t "~s" (quote *x))T)))
+   ((terpri)   (*SYSTEM* . (progn (format t "~%" )T)))
+
+   ((assert *x)
+    (*SYSTEM* .(setq *facts* (append *facts* (cons (quote *x)NIL)))))
+   ((vi *file)
+    (*SYSTEM* .(progn(ed(quote *file))(pro_load (quote *file))T)))
+   ((vi)
+    (*SYSTEM* .(progn(ed(quote bar.pro))(pro_load (quote bar.pro))T)))
+   ((load *file)
+    (*SYSTEM* .(progn(pro_load (quote *file))T)))
+   ((save *file)
+    (*SYSTEM* .(progn(pro_save (quote *file))T)))
+))
+
+;;;
+;;;	Built in Functions
+;;;
+(defun pro_read (env var-z)
+  (let (x)
+    (setq x(read))
+    (cond
+     ((not(var? var-z))
+      (equal x var-z))
+     (t
+      (bind
+       (cons '*z env)
+       (cons x ':ENVY))
+      T))))
+
+
+(defun pro+ (env var-x var-y var-z)
+  (cond
+   ((not(var? var-z))
+    (eql (+ var-x var-y) var-z))
+   (t
+    (bind
+     (cons '*z env)
+     (cons (+ var-x var-y) ':ENVY))
+    T)))
+
+
+(defun pro- (env var-x var-y var-z)
+  (cond
+   ((not(var? var-z)) 
+    (eql (- var-x var-y) var-z))
+   (t
+    (bind
+     (cons '*z env)
+     (cons (- var-x var-y) ':ENVY))
+    T)))
+
+(defun pro* (env var-x var-y var-z)
+ (cond
+  ((not(var? var-z))
+   (eql (* var-x var-y) var-z))
+  (t
+   (bind
+    (cons '*z env)
+    (cons (* var-x var-y) ':ENVY))
+   T)))
+
+(defun pro/ (env var-x var-y var-z)
+ (cond
+  ((not(var? var-z))
+   (eql (/ var-x var-y) var-z))
+  (t
+   (bind
+    (cons '*z env)
+    (cons (/ var-x var-y) ':ENVY))
+   T)))
+
+
+(defun pro_load (file_name)
+  (with-open-file
+   (file file_name :direction :input)
+   (setq *facts*
+	 (append (built_in) (read file NIL :EOF)))))
+
+
+(defun pro_save (file_name)
+  (with-open-file
+   (file file_name :direction :output)
+   (format file "~s~%" *facts*)))
+
+
+;;;
+;;;	Prolog Subroutines
+;;;
+(defun pro-trace (x)
+  (format t "trace ~s" x)
+  (setq *pro-debug-print* x))
+
+;;;
+;;;	Tempro Subroutines
+;;;
+(defun tmpro-trace (x)  ; x is NIL or T
+  (setq *tmpro-debug-print* x)
+  (setq *pro-debug-print* x))
+
+
+(defun tmpro-assert-new (facts)
+  (setq *facts* (append facts (built_in))))
+
+(defun tmpro-assert (facts)
+  (setq *facts* (append facts *facts*)))
+
+(defmacro set-halt-time (tim)
+  `(setq *halt-time* ,tim))
+
+
+(defun tmpro-assert-at0-new (facts)
+  (setq *at_000* nil)
+  (setq *at_000* (append facts *at_000*))
+  (format t " *at_000*=~s "  *at_000*))
+
+(defun tmpro-assert-at0 (facts)
+  (setq *at_000* (append facts *at_000*))
+  (format t " *at_000*=~s "  *at_000*))
+
+
+
+(defmacro make-at0 (facts)
+`(let()
+  (setq *at_0* nil)
+  (setq *ima-mukashi* nil)
+  (make-at0-1 ,facts)
+  ;(format t " *ima-mukashi*=~s *at_0*=~s "  *ima-mukashi* *at_0*)
+  ))
+
+(defmacro make-at0-1 (facts)
+  `(dolist (clause ,facts)
+     ;(format t " clause=~s " clause)
+     (cond
+      ((mukashi? (caar clause))
+       (push clause *ima-mukashi* )) ; add initial *hito-mukashi*
+      (t
+       (push clause *at_0*)))))
+
+
+
+;;; default definitions
+
+(setq *facts*
+ (append (built_in)
+  '(
+#+kcl    ((nobiru (*X . 1)) (@nobiru *X))
+#+kcl    ((fueru *Y) (@fueru *X)(+ *X 3 *Y))
+#-kcl    ((nobiru (*X . 1)) (●nobiru *X))
+#-kcl    ((fueru *Y) (●fueru *X)(+ *X 3 *Y))
+    ((hanoi 1 *f *t *v) (prin1 *f)(prin1 ->)(print *t))
+    ((hanoi *n *f *t *v) (- *n 1 *n1)
+     (hanoi *n1 *f *v *t)
+     (hanoi 1 *f *t *v)
+     (hanoi *n1 *v *t *f))
+    ((append () *x *x))
+    ((append (*a . *x) *y (*a . *z))   (append *x *y *z))
+    ((fa 0 1))
+    ((fa *n *x) (- *n 1 *n1)(fa *n1 *x1)(mul *x1 *n *x))
+    ((zz () *x))
+    ((zz *x ()))
+    ((zz (*a . *x)(*b . *y)) (z *a *b)(zz *x *y))
+    ((z *x *y) (>= *x *y)(prin1 *x)(prin1 >=)(prin1 *y)(terpri))
+    ((xap *sw) (append *x *y (a s d)) (prin1 *x)(print *y) ~ (check *sw) (print " 1 anser only"))
+    ((check on)))))
+
+(setq *at_000* '(
+#+kcl    ((@nobiru 0))
+#+kcl    ((@fueru 0))
+#-kcl    ((●nobiru 0))
+#-kcl    ((●fueru 0))
+           ))
+
+(setq *halt-time* 10)
+
+;;
+#+sbcl (defun bye () (SB-EXT:QUIT))
+
+;;; EOF

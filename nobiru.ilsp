@@ -1,0 +1,35 @@
+;;
+;;  nobiru
+;;
+
+#-kcl (tmpro-assert-new
+ '(
+   ((p *y) (●p *x)(append *x (0) *y))
+   ((q *y) (●q *x)(+ *x 2 *y))
+   ((append () *x *x))
+   ((append (*a . *x) *y (*a . *z)) (append *x *y *z))))
+
+#-kcl (tmpro-assert-at0-new
+'(
+  ((●p NIL))
+  ((●q 0))
+  ))
+
+(set-halt-time 8)
+
+
+;;
+#+kcl (tmpro-assert-new
+ '(
+   ((p *y) (@p *x)(append *x (0) *y))
+   ((q *y) (@q *x)(+ *x 2 *y))
+   ((append () *x *x))
+   ((append (*a . *x) *y (*a . *z)) (append *x *y *z))))
+
+#+kcl (tmpro-assert-at0-new
+'(
+  ((@p NIL))
+  ((@q 0))
+  ))
+
+;; EOF

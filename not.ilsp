@@ -1,0 +1,23 @@
+;;
+;; not example
+;;
+
+#-kcl (tmpro-assert-new
+ '(
+   ((p)  ~(●q) (print " p "))
+   ((q) (print " q ") ~(●q))
+   ((r) (●p))))
+
+(tmpro-assert-at0-new '(
+  (())))
+
+(set-halt-time 8)
+
+
+#+kcl (tmpro-assert-new
+ '(
+   ((p)  ~(@q) (print " p "))
+   ((q) (print " q ") ~(@q))
+   ((r) (@p))))
+
+;; eof
